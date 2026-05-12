@@ -1,0 +1,96 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: ags-ai-usecase
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ags_ai_usecase}
+    username: ${DB_USERNAME:ags_ai}
+    password: ${DB_PASSWORD:ags_ai}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      embedding:
+        options:
+          model: ${AI_EMBEDDING_MODEL:text-embedding-3-small}
+      chat:
+        options:
+          model: ${AI_CHAT_MODEL:gpt-5.5}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  tracing:
+    enabled: false
+  otlp:
+    tracing:
+      export:
+        enabled: false
+  prometheus:
+    metrics:
+      export:
+        enabled: false
+
+app:
+  ai:
+    api-key: ${OPENAI_API_KEY:}
+    openai-base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+    embedding-model: ${AI_EMBEDDING_MODEL:text-embedding-3-small}
+    chat-model: ${AI_CHAT_MODEL:gpt-5.5}
+    fallback-model: ${AI_FALLBACK_MODEL:gpt-5.4-mini}
+    reasoning-effort: ${AI_REASONING_EFFORT:low}
+    embedding-dimensions: ${AI_EMBEDDING_DIMENSIONS:1536}
+  matching:
+    top-k: ${MATCH_TOP_K:8}
+    similarity-threshold: ${MATCH_SIMILARITY_THRESHOLD:0.60}
+    high-confidence-threshold: ${MATCH_HIGH_CONFIDENCE_THRESHOLD:0.86}
+    ambiguity-delta: ${MATCH_AMBIGUITY_DELTA:0.08}
+    llm-enabled: ${LLM_ENABLED:true}
+    max-llm-candidates: ${MAX_LLM_CANDIDATES:5}
+  cache:
+    key-prefix: ${CACHE_KEY_PREFIX:ags-ai}
+    final-ttl: ${FINAL_CACHE_TTL:30m}
+    semantic-ttl: ${SEMANTIC_CACHE_TTL:6h}
+    vector-ttl: ${VECTOR_CACHE_TTL:15m}
+    llm-ttl: ${LLM_CACHE_TTL:24h}
+  rabbit:
+    exchange: ${RABBITMQ_EXCHANGE:ags.ai.inventory.exchange}
+    routing-key: ${RABBITMQ_ROUTING_KEY:ags.ai.inventory.embedding}
+    embedding-queue: ${RABBITMQ_EMBEDDING_QUEUE:ags.ai.inventory.embedding.queue}
+    dead-letter-exchange: ${RABBITMQ_DLX:ags.ai.inventory.dlx}
+    dead-letter-queue: ${RABBITMQ_DLQ:ags.ai.inventory.embedding.dlq}
+  security:
+    enabled: ${SERVICE_AUTH_ENABLED:false}
+    api-key: ${SERVICE_API_KEY:}
+  observability:
+    enabled: false
+
+logging:
+  level:
+    com.asg.aiusecase: INFO

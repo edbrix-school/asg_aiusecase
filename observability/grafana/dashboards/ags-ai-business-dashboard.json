@@ -1,0 +1,49 @@
+{
+  "title": "AGS AI Inventory Matching",
+  "uid": "ags-ai-inventory",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "HTTP Request Rate",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum(rate(http_server_requests_seconds_count{uri=~\"/search|/inventory|/unit\"}[5m])) by (uri)", "legendFormat": "{{uri}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP Latency p95",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, uri))", "legendFormat": "{{uri}}"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Ambiguity Count",
+      "gridPos": {"x": 0, "y": 8, "w": 8, "h": 6},
+      "targets": [
+        {"expr": "sum(ags_ai_ambiguity_total)", "legendFormat": "ambiguous"}
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "LLM Resolutions",
+      "gridPos": {"x": 8, "y": 8, "w": 8, "h": 6},
+      "targets": [
+        {"expr": "sum(ags_ai_llm_resolution_total)", "legendFormat": "llm"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "JVM Memory",
+      "gridPos": {"x": 16, "y": 8, "w": 8, "h": 6},
+      "targets": [
+        {"expr": "sum(jvm_memory_used_bytes) by (area)", "legendFormat": "{{area}}"}
+      ]
+    }
+  ]
+}

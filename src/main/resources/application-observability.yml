@@ -1,0 +1,22 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  tracing:
+    enabled: true
+    sampling:
+      probability: ${OTEL_TRACES_SAMPLER_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+      export:
+        enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+app:
+  observability:
+    enabled: true

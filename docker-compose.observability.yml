@@ -1,0 +1,77 @@
+services:
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: observability
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    container_name: ags-ai-otel-collector
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ./observability/otel/otel-collector-config.yml:/etc/otelcol/config.yml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - jaeger
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: ags-ai-prometheus
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - app
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: ags-ai-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+
+  loki:
+    image: grafana/loki:3.2.1
+    container_name: ags-ai-loki
+    command: ["-config.file=/etc/loki/local-config.yml"]
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yml:ro
+    ports:
+      - "3100:3100"
+
+  promtail:
+    image: grafana/promtail:3.2.1
+    container_name: ags-ai-promtail
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.63.0
+    container_name: ags-ai-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "14250:14250"
+
+volumes:
+  grafana-data:

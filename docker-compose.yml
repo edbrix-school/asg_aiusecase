@@ -1,0 +1,73 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ags-ai-postgres
+    environment:
+      POSTGRES_DB: ags_ai_usecase
+      POSTGRES_USER: ags_ai
+      POSTGRES_PASSWORD: ags_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ags_ai -d ags_ai_usecase"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: ags-ai-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: ags-ai-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+    container_name: ags-ai-usecase
+    env_file:
+      - .env
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/ags_ai_usecase
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:

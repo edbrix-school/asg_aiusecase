@@ -1,0 +1,47 @@
+### Create inventory
+POST http://localhost:8080/inventory
+Content-Type: application/json
+
+{
+  "productCode": "FR001",
+  "stockCode": "STK-101",
+  "productName": "French Orange",
+  "description": "Imported orange from France",
+  "metadata": {
+    "category": "fruit"
+  }
+}
+
+### Create valid unit
+POST http://localhost:8080/unit
+Content-Type: application/json
+
+{
+  "inventoryId": 1,
+  "unitCode": "CRATE",
+  "unitName": "Crate",
+  "description": "Bulk crate",
+  "validForInventory": true,
+  "compatibilityPriority": 10
+}
+
+### Search with defaults
+POST http://localhost:8080/search
+Content-Type: application/json
+
+{
+  "query": "french orange crate",
+  "includeCandidates": true
+}
+
+### Search with runtime model override
+POST http://localhost:8080/search
+Content-Type: application/json
+
+{
+  "query": "milk ltr",
+  "chatModel": "gpt-5.5",
+  "fallbackModel": "gpt-5.4-mini",
+  "embeddingModel": "text-embedding-3-small",
+  "includeCandidates": true
+}
