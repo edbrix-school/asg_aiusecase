@@ -24,8 +24,9 @@ public class SearchController {
     @PostMapping(value = "/search", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<List<SearchResponse>> search(
             @Valid @RequestPart(value = "query", required = false) String query,
+            @RequestPart(value = "meta", required = false) String meta,
             @RequestPart(value = "file", required = false) MultipartFile file
     ) {
-        return ResponseEntity.ok(orchestrator.search(query, file));
+        return ResponseEntity.ok(orchestrator.search(query, meta, file));
     }
 }

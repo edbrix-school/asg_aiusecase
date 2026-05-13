@@ -35,12 +35,13 @@ public class InventorySearchOrchestrator {
     private final SearchService searchService;
     private final AppProperties properties;
 
-    public List<SearchResponse> search(String queryPayload, MultipartFile file) {
+    public List<SearchResponse> search(String queryPayload, String metaPayload, MultipartFile file) {
         if ((queryPayload == null || queryPayload.isBlank()) && (file == null || file.isEmpty())) {
             throw new IllegalArgumentException("Either query or file must be provided");
         }
 
         ParsedQuery parsedQuery = queryPayloadParser.parse(queryPayload);
+        SearchOptions metaDefaults = queryPayloadParser.parseOptionsPayload(metaPayload);
         List<InventoryLine> lines = new ArrayList<>();
         lines.addAll(parsedQuery.lines());
         lines.addAll(fileIngestionService.ingest(file, "file"));
@@ -48,7 +49,7 @@ public class InventorySearchOrchestrator {
             throw new IllegalArgumentException("No inventory lines found");
         }
 
-        SearchOptions defaults = parsedQuery.defaults();
+        SearchOptions defaults = parsedQuery.defaults().merge(metaDefaults);
         List<InventoryLine> merged = lines.stream()
                 .map(line -> new InventoryLine(
                         line.id(),

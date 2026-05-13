@@ -40,6 +40,21 @@ public class QueryPayloadParser {
         return new ParsedQuery(parseMultilineText(trimmed, "query"), SearchOptions.empty());
     }
 
+    public SearchOptions parseOptionsPayload(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return SearchOptions.empty();
+        }
+        try {
+            JsonNode root = objectMapper.readTree(payload.trim());
+            if (root != null && root.isObject()) {
+                return parseOptions(root);
+            }
+        } catch (Exception ignored) {
+            // ignore invalid meta payload
+        }
+        return SearchOptions.empty();
+    }
+
     private ParsedQuery parseObject(JsonNode root) {
         SearchOptions defaults = parseOptions(root.path("options"));
         List<InventoryLine> lines = new ArrayList<>();
