@@ -130,7 +130,8 @@ public class SearchService {
         List<ResolvedCandidate> candidates = businessRuleEngine.evaluate(
                 request.query(),
                 snapshot.inventories(),
-                snapshot.units()
+                snapshot.units(),
+                parsedUnit
         );
         if (candidates.isEmpty()) {
             Map<String, Object> meta = new LinkedHashMap<>();

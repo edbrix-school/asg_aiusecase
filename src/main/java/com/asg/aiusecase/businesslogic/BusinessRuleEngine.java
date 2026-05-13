@@ -30,12 +30,13 @@ public class BusinessRuleEngine {
     @Transactional(readOnly = true)
     public List<ResolvedCandidate> evaluate(String query,
                                             List<InventoryVectorMatch> inventoryMatches,
-                                            List<UnitVectorMatch> unitMatches) {
+                                            List<UnitVectorMatch> unitMatches,
+                                            String parsedUnit) {
         Optional<SynonymEntity> inventorySynonym = synonymResolver.findInventorySynonym(query);
         Optional<SynonymEntity> unitSynonym = synonymResolver.findUnitSynonym(query);
 
         List<InventoryEntity> exactInventoryMatches = exactInventoryMatches(query, inventorySynonym);
-        List<UnitEntity> exactUnitMatches = exactUnitMatches(query, unitSynonym);
+        List<UnitEntity> exactUnitMatches = exactUnitMatches(query, unitSynonym, parsedUnit);
 
         List<ResolvedCandidate> vectorCandidates = inventoryMatches.stream()
                 .flatMap(match -> inventoryRepository.findById(match.id()).stream()
@@ -70,11 +71,15 @@ public class BusinessRuleEngine {
         return matches.stream().toList();
     }
 
-    private List<UnitEntity> exactUnitMatches(String query, Optional<SynonymEntity> unitSynonym) {
+    private List<UnitEntity> exactUnitMatches(String query, Optional<SynonymEntity> unitSynonym, String parsedUnit) {
         LinkedHashSet<UnitEntity> matches = new LinkedHashSet<>();
         String normalized = query == null ? "" : query.trim();
         unitRepository.findFirstByStockUnitCodeIgnoreCase(normalized).ifPresent(matches::add);
         unitRepository.findFirstByStockUnitNameIgnoreCase(normalized).ifPresent(matches::add);
+        if (parsedUnit != null && !parsedUnit.isBlank()) {
+            unitRepository.findFirstByStockUnitCodeIgnoreCase(parsedUnit).ifPresent(matches::add);
+            unitRepository.findFirstByStockUnitNameIgnoreCase(parsedUnit).ifPresent(matches::add);
+        }
         unitSynonym.ifPresent(s -> {
             unitRepository.findFirstByStockUnitCodeIgnoreCase(s.getActualValue()).ifPresent(matches::add);
             unitRepository.findFirstByStockUnitNameIgnoreCase(s.getActualValue()).ifPresent(matches::add);
@@ -93,12 +98,6 @@ public class BusinessRuleEngine {
         unitMatches.stream()
                 .flatMap(match -> unitRepository.findById(match.id()).stream())
                 .forEach(selectedUnits::add);
-        if (selectedUnits.isEmpty()) {
-            unitRepository.findByActiveIgnoreCaseAndDeletedIgnoreCase("Y", "N").stream()
-                    .limit(3)
-                    .forEach(selectedUnits::add);
-        }
-
         return selectedUnits.stream()
                 .map(unit -> toCandidate(query, inventory, unit, inventorySimilarity, unitMatches, unitSynonym.isPresent()))
                 .toList();
