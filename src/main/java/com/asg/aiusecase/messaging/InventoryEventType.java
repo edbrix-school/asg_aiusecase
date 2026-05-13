@@ -1,11 +1,10 @@
 package com.asg.aiusecase.messaging;
 
 public enum InventoryEventType {
-    PRODUCT_CREATED,
-    PRODUCT_UPDATED,
-    PRODUCT_DELETED,
+    STOCK_CREATED,
     STOCK_UPDATED,
-    UNIT_CREATED,
-    UNIT_UPDATED,
-    UNIT_DELETED
+    STOCK_DELETED,
+    STOCK_UNIT_CREATED,
+    STOCK_UNIT_UPDATED,
+    STOCK_UNIT_DELETED
 }

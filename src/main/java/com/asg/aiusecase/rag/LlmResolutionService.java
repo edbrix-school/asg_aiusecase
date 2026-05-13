@@ -1,6 +1,5 @@
 package com.asg.aiusecase.rag;
 
-import com.asg.aiusecase.businesslogic.CompatibilityValidator;
 import com.asg.aiusecase.businesslogic.ResolvedCandidate;
 import com.asg.aiusecase.cache.CacheService;
 import com.asg.aiusecase.cache.HashingService;
@@ -21,10 +20,13 @@ public class LlmResolutionService {
 
     private final RagPromptBuilder promptBuilder;
     private final OpenAiResponsesClient openAiResponsesClient;
-    private final CompatibilityValidator compatibilityValidator;
     private final CacheService cacheService;
     private final HashingService hashingService;
     private final AppProperties properties;
+
+    public LlmClientResult parseQuantityBatch(String systemPrompt, String userPrompt, String modelOverride) {
+        return openAiResponsesClient.parseQuantityBatch(systemPrompt, userPrompt, modelOverride);
+    }
 
     public Optional<ResolvedCandidate> resolve(String query,
                                                List<ResolvedCandidate> candidates,
@@ -81,12 +83,12 @@ public class LlmResolutionService {
                     model
             );
             JsonNode payload = result.payload();
-            if (payload.path("inventoryId").isNull() || payload.path("unitId").isNull()) {
+            if (payload.path("stockPoid").isNull() || payload.path("stockUnitPoid").isNull()) {
                 return Optional.empty();
             }
             return Optional.of(new LlmResolutionResult(
-                    payload.path("inventoryId").asLong(),
-                    payload.path("unitId").asLong(),
+                    payload.path("stockPoid").asLong(),
+                    payload.path("stockUnitPoid").asLong(),
                     payload.path("confidence").asDouble(0.0),
                     payload.path("reason").asText("")
             ));
@@ -98,9 +100,8 @@ public class LlmResolutionService {
 
     private Optional<ResolvedCandidate> validate(LlmResolutionResult result, List<ResolvedCandidate> allowed) {
         return allowed.stream()
-                .filter(candidate -> candidate.inventory().getId().equals(result.inventoryId()))
-                .filter(candidate -> candidate.unit().getId().equals(result.unitId()))
-                .filter(candidate -> compatibilityValidator.isCompatible(result.inventoryId(), result.unitId()))
+                .filter(candidate -> candidate.inventory().getId().equals(result.stockPoid()))
+                .filter(candidate -> candidate.unit().getId().equals(result.stockUnitPoid()))
                 .findFirst();
     }
 }

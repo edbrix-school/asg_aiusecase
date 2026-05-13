@@ -1,9 +1,8 @@
 package com.asg.aiusecase.dto;
 
 public record MatchedStockDto(
-        Long inventoryId,
+        Long stockPoid,
         String stockCode,
-        String productCode,
-        String productName
+        String stockName
 ) {
 }

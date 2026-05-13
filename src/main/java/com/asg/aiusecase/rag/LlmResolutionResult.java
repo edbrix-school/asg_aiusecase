@@ -1,8 +1,8 @@
 package com.asg.aiusecase.rag;
 
 public record LlmResolutionResult(
-        Long inventoryId,
-        Long unitId,
+        Long stockPoid,
+        Long stockUnitPoid,
         double confidence,
         String reason
 ) {

@@ -29,18 +29,19 @@ public class EmbeddingEventConsumer {
     )
     @RabbitListener(queues = "${app.rabbit.embedding-queue}")
     public void handle(InventoryEvent event) {
-        log.info("Processing embedding event id={} type={}", event.eventId(), event.type());
+        log.info("Processing stock embedding event id={} type={}", event.eventId(), event.type());
         switch (event.type()) {
-            case PRODUCT_CREATED, PRODUCT_UPDATED, STOCK_UPDATED -> embeddingPipelineService.regenerateInventoryEmbedding(event.inventoryId());
-            case UNIT_CREATED, UNIT_UPDATED -> embeddingPipelineService.regenerateUnitEmbedding(event.unitId());
-            case PRODUCT_DELETED, UNIT_DELETED -> log.info("Delete event observed; embeddings already removed by relational delete id={}", event.eventId());
+            case STOCK_CREATED, STOCK_UPDATED -> embeddingPipelineService.regenerateStockEmbedding(event.stockPoid());
+            case STOCK_UNIT_CREATED, STOCK_UNIT_UPDATED -> embeddingPipelineService.regenerateStockUnitEmbedding(event.stockUnitPoid());
+            case STOCK_DELETED -> embeddingPipelineService.deleteStockEmbedding(event.stockPoid());
+            case STOCK_UNIT_DELETED -> embeddingPipelineService.deleteStockUnitEmbedding(event.stockUnitPoid());
         }
         cacheService.invalidateSemanticState();
     }
 
     @Recover
     public void recover(Exception exception, InventoryEvent event) {
-        log.error("Embedding event failed permanently id={} type={}", event.eventId(), event.type(), exception);
+        log.error("Stock embedding event failed permanently id={} type={}", event.eventId(), event.type(), exception);
         rabbitTemplate.convertAndSend(properties.getRabbit().getDeadLetterExchange(), "", event);
     }
 }

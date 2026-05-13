@@ -4,14 +4,16 @@ import java.util.List;
 import java.util.Map;
 
 public record SearchResponse(
-        InventoryDto matchedInventory,
         MatchedStockDto matchedStock,
-        UnitDto matchedUnit,
+        MatchedUnitDto matchedStockUnit,
         double confidenceScore,
         double cosineSimilarity,
         ReasoningSource reasoningSource,
         Map<String, Object> reasoningMetadata,
         AmbiguityStatus ambiguityStatus,
-        List<CandidateDto> candidates
+        List<CandidateDto> candidates,
+        Double parsedQuantity,
+        String parsedUnit,
+        String parsedBatch
 ) {
 }

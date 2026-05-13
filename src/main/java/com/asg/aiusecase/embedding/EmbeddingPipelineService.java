@@ -24,28 +24,69 @@ public class EmbeddingPipelineService {
     private final VectorRepository vectorRepository;
 
     @Transactional
-    public void regenerateInventoryEmbedding(Long inventoryId) {
-        inventoryRepository.findById(inventoryId).ifPresentOrElse(this::regenerateInventoryEmbedding,
-                () -> log.warn("Skipping inventory embedding regeneration; id={} not found", inventoryId));
+    public void regenerateStockEmbedding(Long stockPoid) {
+        inventoryRepository.findById(stockPoid).ifPresentOrElse(this::regenerateStockEmbedding,
+                () -> log.warn("Skipping stock embedding regeneration; STOCK_POID={} not found", stockPoid));
     }
 
     @Transactional
-    public void regenerateUnitEmbedding(Long unitId) {
-        unitRepository.findById(unitId).ifPresentOrElse(this::regenerateUnitEmbedding,
-                () -> log.warn("Skipping unit embedding regeneration; id={} not found", unitId));
+    public void regenerateStockUnitEmbedding(Long stockUnitPoid) {
+        unitRepository.findById(stockUnitPoid).ifPresentOrElse(this::regenerateStockUnitEmbedding,
+                () -> log.warn("Skipping stock unit embedding regeneration; STOCK_UNIT_POID={} not found", stockUnitPoid));
     }
 
-    public void regenerateInventoryEmbedding(InventoryEntity inventory) {
-        Map<String, Object> payload = serializer.inventoryPayload(inventory);
+    public void regenerateStockEmbedding(InventoryEntity stock) {
+        Map<String, Object> payload = serializer.inventoryPayload(stock);
         float[] embedding = embeddingService.embed(serializer.compactString(payload), null);
-        vectorRepository.updateInventoryEmbedding(inventory.getId(), payload, embedding);
-        log.info("Regenerated inventory embedding id={} stockCode={}", inventory.getId(), inventory.getStockCode());
+        vectorRepository.upsertStockEmbedding(stock, payload, embedding);
+        log.info("Regenerated stock embedding STOCK_POID={} STOCK_CODE={}", stock.getId(), stock.getStockCode());
     }
 
-    public void regenerateUnitEmbedding(UnitEntity unit) {
-        Map<String, Object> payload = serializer.unitPayload(unit);
+    public void regenerateStockUnitEmbedding(UnitEntity stockUnit) {
+        Map<String, Object> payload = serializer.unitPayload(stockUnit);
         float[] embedding = embeddingService.embed(serializer.compactString(payload), null);
-        vectorRepository.updateUnitEmbedding(unit.getId(), payload, embedding);
-        log.info("Regenerated unit embedding id={} unitCode={}", unit.getId(), unit.getUnitCode());
+        vectorRepository.upsertStockUnitEmbedding(stockUnit, payload, embedding);
+        log.info("Regenerated stock unit embedding STOCK_UNIT_POID={} STOCK_UNIT_CODE={}", stockUnit.getId(), stockUnit.getUnitCode());
+    }
+
+    public void deleteStockEmbedding(Long stockPoid) {
+        vectorRepository.deleteStockEmbedding(stockPoid);
+        log.info("Deleted stock embedding STOCK_POID={}", stockPoid);
+    }
+
+    public void deleteStockUnitEmbedding(Long stockUnitPoid) {
+        vectorRepository.deleteStockUnitEmbedding(stockUnitPoid);
+        log.info("Deleted stock unit embedding STOCK_UNIT_POID={}", stockUnitPoid);
+    }
+
+    @Transactional
+    public int clearLocalInventoryEmbeddings() {
+        int deletedStocks = vectorRepository.clearAllStockEmbeddings();
+        int deletedUnits = vectorRepository.clearAllStockUnitEmbeddings();
+        int total = deletedStocks + deletedUnits;
+        log.info("Cleared local embeddings: stockRows={} unitRows={} totalRows={}", deletedStocks, deletedUnits, total);
+        return total;
+    }
+
+    @Transactional
+    public int syncAllStockEmbeddingsFromCommonDb() {
+        int processed = 0;
+        for (InventoryEntity stock : inventoryRepository.findAllActiveNotDeleted()) {
+            regenerateStockEmbedding(stock);
+            processed++;
+        }
+        log.info("Synced stock embeddings from common DB; processed={}", processed);
+        return processed;
+    }
+
+    @Transactional
+    public int syncAllStockUnitEmbeddingsFromCommonDb() {
+        int processed = 0;
+        for (UnitEntity stockUnit : unitRepository.findAllActiveNotDeleted()) {
+            regenerateStockUnitEmbedding(stockUnit);
+            processed++;
+        }
+        log.info("Synced stock unit embeddings from common DB; processed={}", processed);
+        return processed;
     }
 }

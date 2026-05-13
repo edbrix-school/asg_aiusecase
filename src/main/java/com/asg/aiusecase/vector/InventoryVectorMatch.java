@@ -4,10 +4,9 @@ import java.util.Map;
 
 public record InventoryVectorMatch(
         Long id,
-        String productCode,
         String stockCode,
-        String productName,
-        String description,
+        String stockName,
+        String stockDescription,
         Map<String, Object> metadata,
         Map<String, Object> serialized,
         double cosineSimilarity

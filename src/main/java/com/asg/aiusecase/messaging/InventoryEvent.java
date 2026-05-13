@@ -6,11 +6,11 @@ import java.util.UUID;
 public record InventoryEvent(
         UUID eventId,
         InventoryEventType type,
-        Long inventoryId,
-        Long unitId,
+        Long stockPoid,
+        Long stockUnitPoid,
         OffsetDateTime occurredAt
 ) {
-    public InventoryEvent(InventoryEventType type, Long inventoryId, Long unitId) {
-        this(UUID.randomUUID(), type, inventoryId, unitId, OffsetDateTime.now());
+    public InventoryEvent(InventoryEventType type, Long stockPoid, Long stockUnitPoid) {
+        this(UUID.randomUUID(), type, stockPoid, stockUnitPoid, OffsetDateTime.now());
     }
 }

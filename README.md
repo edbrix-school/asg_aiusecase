@@ -10,7 +10,8 @@ This service does not call or depend on the old `ai-usecase` or `als-shipchandli
 - Spring Boot 3.5
 - Spring AI 1.1.6
 - OpenAI Java SDK dependency 4.35.0
-- PostgreSQL + pgvector
+- PostgreSQL + pgvector for vector side tables, caches, and AI-owned schema
+- Oracle common database for current `STOCK_MASTER` and `STOCK_UNIT_MASTER` reads; switch `COMMON_DB_*` settings when this moves to PostgreSQL
 - Redis
 - RabbitMQ
 - Optional OpenTelemetry, Prometheus, Grafana, Loki, Jaeger
@@ -73,20 +74,26 @@ Required endpoints:
 
 ```text
 POST /search
-POST /inventory
-POST /unit
-PUT /inventory/{id}
-PUT /unit/{id}
+POST /stock/embedding-events
+GET /stock/common-db
+GET /stock-unit/common-db
+DELETE /stock/embeddings/local
+POST /stock/embeddings/sync-all
 ```
 
-Extra read endpoints are included for operations:
+`POST /stock/embedding-events` is the integration endpoint other microservices call after they complete CRUD in the common database. This service publishes the event to RabbitMQ; the embedding worker then reloads the latest row from `STOCK_MASTER` or `STOCK_UNIT_MASTER` through the configured common DB connection and updates the PostgreSQL vector side table.
 
-```text
-GET /inventory
-GET /inventory/{id}
-GET /unit?inventoryId={id}
-GET /unit/{id}
-```
+`GET /stock/common-db` and `GET /stock-unit/common-db` return the current active, non-deleted records from common DB.
+
+`DELETE /stock/embeddings/local` clears local vector embedding tables.
+
+`POST /stock/embeddings/sync-all` rebuilds local stock and stock-unit embeddings from all active, non-deleted rows in common DB.
+
+## Databases
+
+- `spring.datasource.*` points to this service's PostgreSQL database. Flyway, Redis-backed cache entities, LLM cache entities, and pgvector side tables live here.
+- `app.common-db.datasource.*` points to the shared stock database. It is Oracle today and can be changed to PostgreSQL later by changing `COMMON_DB_URL`, `COMMON_DB_USERNAME`, `COMMON_DB_PASSWORD`, and `COMMON_DB_DRIVER`.
+- Search reads only the vector side tables in PostgreSQL. Embedding events refresh those side tables from the common DB, so cross-database joins are not required.
 
 ## Matching Safety
 
@@ -96,15 +103,14 @@ The resolver follows this order:
 2. Redis semantic cache
 3. Query embedding
 4. Redis vector result cache
-5. Parallel pgvector inventory and unit search
-6. Stock code/product code/synonym checks
-7. Unit filtering
-8. Compatibility rule validation
-9. Confidence scoring
-10. Optional batched LLM ambiguity resolution
-11. Final hard validation
+5. Parallel pgvector stock and stock-unit search
+6. Stock code/stock name/synonym checks
+7. Stock-unit matching
+8. Confidence scoring
+9. Optional batched LLM ambiguity resolution
+10. Final hard validation
 
-LLM output is never trusted directly. It can only select from business-approved candidate `inventoryId` and `unitId` pairs. If it returns anything outside those candidates, the service rejects it and falls back to the best validated business-rule result.
+LLM output is never trusted directly. It can only select from retrieved candidate `stockPoid` and `stockUnitPoid` pairs. If it returns anything outside those candidates, the service rejects it and falls back to the best validated vector result.
 
 ## Sample Data
 

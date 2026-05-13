@@ -4,11 +4,10 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 
 public record InventoryDto(
-        Long id,
-        String productCode,
+        Long stockPoid,
         String stockCode,
-        String productName,
-        String description,
+        String stockName,
+        String stockDescription,
         Map<String, Object> metadata,
         Map<String, Object> serialized,
         OffsetDateTime createdAt,

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,30 +25,31 @@ public class BusinessRuleEngine {
     private final SynonymResolver synonymResolver;
     private final StockMatcher stockMatcher;
     private final UnitMatcher unitMatcher;
-    private final CompatibilityValidator compatibilityValidator;
     private final ConfidenceCalculator confidenceCalculator;
 
     @Transactional(readOnly = true)
     public List<ResolvedCandidate> evaluate(String query,
                                             List<InventoryVectorMatch> inventoryMatches,
-                                            List<UnitVectorMatch> unitMatches) {
+                                            List<UnitVectorMatch> unitMatches,
+                                            String parsedUnit) {
         Optional<SynonymEntity> inventorySynonym = synonymResolver.findInventorySynonym(query);
         Optional<SynonymEntity> unitSynonym = synonymResolver.findUnitSynonym(query);
 
         List<InventoryEntity> exactInventoryMatches = exactInventoryMatches(query, inventorySynonym);
+        List<UnitEntity> exactUnitMatches = exactUnitMatches(query, unitSynonym, parsedUnit);
+
         List<ResolvedCandidate> vectorCandidates = inventoryMatches.stream()
                 .flatMap(match -> inventoryRepository.findById(match.id()).stream()
-                        .flatMap(inventory -> resolveUnitsForInventory(query, inventory, match.cosineSimilarity(), unitMatches, unitSynonym).stream()))
+                        .flatMap(inventory -> resolveUnits(query, inventory, match.cosineSimilarity(), exactUnitMatches, unitMatches, unitSynonym).stream()))
                 .toList();
 
         List<ResolvedCandidate> exactCandidates = exactInventoryMatches.stream()
-                .flatMap(inventory -> resolveUnitsForInventory(query, inventory, 1.0, unitMatches, unitSynonym).stream())
+                .flatMap(inventory -> resolveUnits(query, inventory, 1.0, exactUnitMatches, unitMatches, unitSynonym).stream())
                 .toList();
 
         return java.util.stream.Stream.concat(exactCandidates.stream(), vectorCandidates.stream())
-                .filter(ResolvedCandidate::compatible)
                 .collect(java.util.stream.Collectors.toMap(
-                        c -> c.inventory().getId() + ":" + (c.unit() == null ? "null" : c.unit().getId()),
+                        c -> c.inventory().getId() + ":" + c.unit().getId(),
                         c -> c,
                         (left, right) -> left.confidence() >= right.confidence() ? left : right
                 ))
@@ -58,52 +60,44 @@ public class BusinessRuleEngine {
     }
 
     private List<InventoryEntity> exactInventoryMatches(String query, Optional<SynonymEntity> inventorySynonym) {
-        java.util.LinkedHashSet<InventoryEntity> matches = new java.util.LinkedHashSet<>();
+        LinkedHashSet<InventoryEntity> matches = new LinkedHashSet<>();
         String normalized = query == null ? "" : query.trim();
         inventoryRepository.findFirstByStockCodeIgnoreCase(normalized).ifPresent(matches::add);
-        inventoryRepository.findFirstByProductCodeIgnoreCase(normalized).ifPresent(matches::add);
+        inventoryRepository.findFirstByStockNameIgnoreCase(normalized).ifPresent(matches::add);
         inventorySynonym.ifPresent(s -> {
             inventoryRepository.findFirstByStockCodeIgnoreCase(s.getActualValue()).ifPresent(matches::add);
-            inventoryRepository.findFirstByProductCodeIgnoreCase(s.getActualValue()).ifPresent(matches::add);
-            inventoryRepository.findAll().stream()
-                    .filter(i -> i.getProductName().equalsIgnoreCase(s.getActualValue()))
-                    .findFirst()
-                    .ifPresent(matches::add);
+            inventoryRepository.findFirstByStockNameIgnoreCase(s.getActualValue()).ifPresent(matches::add);
         });
         return matches.stream().toList();
     }
 
-    private List<ResolvedCandidate> resolveUnitsForInventory(String query,
-                                                             InventoryEntity inventory,
-                                                             double inventorySimilarity,
-                                                             List<UnitVectorMatch> unitMatches,
-                                                             Optional<SynonymEntity> unitSynonym) {
-        List<UnitEntity> compatibleUnits = compatibilityValidator.validRules(inventory.getId()).stream()
-                .map(rule -> rule.getUnit())
-                .toList();
-        if (compatibleUnits.isEmpty()) {
-            return List.of();
+    private List<UnitEntity> exactUnitMatches(String query, Optional<SynonymEntity> unitSynonym, String parsedUnit) {
+        LinkedHashSet<UnitEntity> matches = new LinkedHashSet<>();
+        String normalized = query == null ? "" : query.trim();
+        unitRepository.findFirstByStockUnitCodeIgnoreCase(normalized).ifPresent(matches::add);
+        unitRepository.findFirstByStockUnitNameIgnoreCase(normalized).ifPresent(matches::add);
+        if (parsedUnit != null && !parsedUnit.isBlank()) {
+            unitRepository.findFirstByStockUnitCodeIgnoreCase(parsedUnit).ifPresent(matches::add);
+            unitRepository.findFirstByStockUnitNameIgnoreCase(parsedUnit).ifPresent(matches::add);
         }
+        unitSynonym.ifPresent(s -> {
+            unitRepository.findFirstByStockUnitCodeIgnoreCase(s.getActualValue()).ifPresent(matches::add);
+            unitRepository.findFirstByStockUnitNameIgnoreCase(s.getActualValue()).ifPresent(matches::add);
+        });
+        return matches.stream().toList();
+    }
 
-        List<UnitEntity> mentionedCompatibleUnits = compatibleUnits.stream()
-                .filter(unit -> unitMatcher.queryMentionsUnit(query, unit)
-                        || unitSynonym.map(s -> unit.getUnitCode().equalsIgnoreCase(s.getActualValue())
-                        || unit.getUnitName().equalsIgnoreCase(s.getActualValue())).orElse(false))
-                .toList();
-
-        List<UnitEntity> vectorCompatibleUnits = unitMatches.stream()
-                .filter(match -> match.inventoryId().equals(inventory.getId()))
+    private List<ResolvedCandidate> resolveUnits(String query,
+                                                 InventoryEntity inventory,
+                                                 double inventorySimilarity,
+                                                 List<UnitEntity> exactUnitMatches,
+                                                 List<UnitVectorMatch> unitMatches,
+                                                 Optional<SynonymEntity> unitSynonym) {
+        LinkedHashSet<UnitEntity> selectedUnits = new LinkedHashSet<>();
+        selectedUnits.addAll(exactUnitMatches);
+        unitMatches.stream()
                 .flatMap(match -> unitRepository.findById(match.id()).stream())
-                .filter(unit -> compatibilityValidator.isCompatible(inventory.getId(), unit.getId()))
-                .toList();
-
-        java.util.LinkedHashSet<UnitEntity> selectedUnits = new java.util.LinkedHashSet<>();
-        selectedUnits.addAll(mentionedCompatibleUnits);
-        selectedUnits.addAll(vectorCompatibleUnits);
-        if (selectedUnits.isEmpty()) {
-            compatibilityValidator.highestPriorityValidUnit(inventory.getId()).ifPresent(selectedUnits::add);
-        }
-
+                .forEach(selectedUnits::add);
         return selectedUnits.stream()
                 .map(unit -> toCandidate(query, inventory, unit, inventorySimilarity, unitMatches, unitSynonym.isPresent()))
                 .toList();
@@ -120,7 +114,6 @@ public class BusinessRuleEngine {
                 .map(UnitVectorMatch::cosineSimilarity)
                 .findFirst()
                 .orElse(unitMatcher.queryMentionsUnit(query, unit) ? 1.0 : 0.70);
-        boolean compatible = compatibilityValidator.isCompatible(inventory.getId(), unit.getId());
         boolean exact = stockMatcher.exactStockMatch(query, inventory);
         double confidence = confidenceCalculator.calculate(
                 inventorySimilarity,
@@ -128,9 +121,9 @@ public class BusinessRuleEngine {
                 stockMatcher.exactBoost(query, inventory),
                 unitMatcher.unitBoost(query, unit),
                 synonymMatched,
-                compatible
+                true
         );
-        String reason = exact ? "exact stock/product code plus business-compatible unit" : "semantic vector match plus business-compatible unit";
-        return new ResolvedCandidate(inventory, unit, inventorySimilarity, unitSimilarity, exact, synonymMatched, compatible, confidence, reason);
+        String reason = exact ? "exact stock master match plus stock unit match" : "semantic stock master match plus stock unit match";
+        return new ResolvedCandidate(inventory, unit, inventorySimilarity, unitSimilarity, exact, synonymMatched, true, confidence, reason);
     }
 }
