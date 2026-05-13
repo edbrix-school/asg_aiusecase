@@ -4,6 +4,7 @@ import com.asg.aiusecase.businesslogic.ResolvedCandidate;
 import com.asg.aiusecase.dto.CandidateDto;
 import com.asg.aiusecase.dto.InventoryDto;
 import com.asg.aiusecase.dto.MatchedStockDto;
+import com.asg.aiusecase.dto.MatchedUnitDto;
 import com.asg.aiusecase.dto.UnitDto;
 import com.asg.aiusecase.entity.InventoryEntity;
 import com.asg.aiusecase.entity.UnitEntity;
@@ -40,6 +41,17 @@ public class DtoMapper {
                 entity.getSerializedJson(),
                 null,
                 null
+        );
+    }
+
+    public MatchedUnitDto toMatchedUnitDto(UnitEntity entity) {
+        if (entity == null) {
+            return null;
+        }
+        return new MatchedUnitDto(
+                entity.getId(),
+                entity.getUnitCode(),
+                entity.getUnitName()
         );
     }
 

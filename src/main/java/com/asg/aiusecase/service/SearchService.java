@@ -206,13 +206,13 @@ public class SearchService {
         List<CandidateDto> candidateDtos = Boolean.TRUE.equals(includeCandidates)
                 ? candidates.stream()
                 .sorted(Comparator.comparingDouble(ResolvedCandidate::confidence).reversed())
+                .limit(5)
                 .map(mapper::toCandidateDto)
                 .toList()
                 : List.of();
         return new SearchResponse(
-                mapper.toInventoryDto(selected.inventory()),
                 mapper.toMatchedStockDto(selected.inventory()),
-                mapper.toUnitDto(selected.unit()),
+                mapper.toMatchedUnitDto(selected.unit()),
                 round(selected.confidence()),
                 round(selected.inventorySimilarity()),
                 source,
@@ -227,7 +227,7 @@ public class SearchService {
 
     private SearchResponse unmatchedResponse(SearchRequest request, Map<String, Object> metadata,
                                              Double parsedQuantity, String parsedUnit, String parsedBatch) {
-        return new SearchResponse(null, null, null, 0.0, 0.0, ReasoningSource.VECTOR,
+        return new SearchResponse(null, null, 0.0, 0.0, ReasoningSource.VECTOR,
                 metadata, AmbiguityStatus.UNRESOLVED, List.of(), parsedQuantity, parsedUnit, parsedBatch);
     }
 
@@ -249,7 +249,6 @@ public class SearchService {
         Map<String, Object> metadata = new LinkedHashMap<>(cached.reasoningMetadata() == null ? Map.of() : cached.reasoningMetadata());
         metadata.put("cacheLayer", cacheLayer);
         return new SearchResponse(
-                cached.matchedStockMaster(),
                 cached.matchedStock(),
                 cached.matchedStockUnit(),
                 cached.confidenceScore(),
