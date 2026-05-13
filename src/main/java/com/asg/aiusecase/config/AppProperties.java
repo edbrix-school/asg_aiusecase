@@ -17,6 +17,8 @@ public class AppProperties {
     private Rabbit rabbit = new Rabbit();
     private Security security = new Security();
     private Observability observability = new Observability();
+    private Ingestion ingestion = new Ingestion();
+    private Batch batch = new Batch();
 
     @Getter
     @Setter
@@ -75,5 +77,20 @@ public class AppProperties {
     @Setter
     public static class Observability {
         private boolean enabled = false;
+    }
+
+    @Getter
+    @Setter
+    public static class Ingestion {
+        private long maxFileSizeBytes = 5 * 1024 * 1024;
+        private String textPlainMime = "text/plain";
+    }
+
+    @Getter
+    @Setter
+    public static class Batch {
+        private int quantityBatchSize = 25;
+        private int ambiguityBatchSize = 10;
+        private int llmRetryAttempts = 2;
     }
 }

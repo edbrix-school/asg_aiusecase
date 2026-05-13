@@ -114,6 +114,92 @@ public class OpenAiResponsesClient {
         return new LlmClientResult(payload, metadata);
     }
 
+    public JsonNode parseQuantitiesBatch(String systemPrompt, String userPrompt, String modelOverride) {
+        String model = modelOverride == null || modelOverride.isBlank()
+                ? "gpt-4.1-nano"
+                : modelOverride;
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", model);
+        body.put("input", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userPrompt)
+        ));
+        body.put("text", Map.of("format", Map.of(
+                "type", "json_schema",
+                "name", "quantity_parsing_batch",
+                "strict", true,
+                "schema", Map.of(
+                        "type", "array",
+                        "items", Map.of(
+                                "type", "object",
+                                "additionalProperties", false,
+                                "properties", Map.of(
+                                        "id", Map.of("type", "string"),
+                                        "quantity", Map.of("type", List.of("number", "null")),
+                                        "unit", Map.of("type", List.of("string", "null")),
+                                        "batch", Map.of("type", List.of("string", "null"))
+                                ),
+                                "required", List.of("id", "quantity", "unit", "batch")
+                        )
+                )
+        )));
+
+        JsonNode response = openAiRestClient.post()
+                .uri("/v1/responses")
+                .body(body)
+                .retrieve()
+                .body(JsonNode.class);
+
+        String outputText = extractOutputText(response);
+        return parsePayload(outputText);
+    }
+
+    public JsonNode resolveBatch(String systemPrompt, String userPrompt, String modelOverride) {
+        String model = modelOverride == null || modelOverride.isBlank()
+                ? properties.getAi().getChatModel()
+                : modelOverride;
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", model);
+        body.put("input", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userPrompt)
+        ));
+        body.put("text", Map.of("format", Map.of(
+                "type", "json_schema",
+                "name", "stock_resolution_batch",
+                "strict", true,
+                "schema", Map.of(
+                        "type", "array",
+                        "items", Map.of(
+                                "type", "object",
+                                "additionalProperties", false,
+                                "properties", Map.of(
+                                        "id", Map.of("type", "string"),
+                                        "stockPoid", Map.of("type", List.of("number", "null")),
+                                        "stockUnitPoid", Map.of("type", List.of("number", "null")),
+                                        "confidence", Map.of("type", "number"),
+                                        "reason", Map.of("type", "string")
+                                ),
+                                "required", List.of("id", "stockPoid", "stockUnitPoid", "confidence", "reason")
+                        )
+                )
+        )));
+        if (model.toLowerCase().startsWith("gpt-5")) {
+            body.put("reasoning", Map.of("effort", properties.getAi().getReasoningEffort()));
+        }
+
+        JsonNode response = openAiRestClient.post()
+                .uri("/v1/responses")
+                .body(body)
+                .retrieve()
+                .body(JsonNode.class);
+
+        String outputText = extractOutputText(response);
+        return parsePayload(outputText);
+    }
+
     private String extractOutputText(JsonNode response) {
         if (response == null) {
             throw new IllegalStateException("OpenAI response was empty");
