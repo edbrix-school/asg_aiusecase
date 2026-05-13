@@ -58,4 +58,35 @@ public class EmbeddingPipelineService {
         vectorRepository.deleteStockUnitEmbedding(stockUnitPoid);
         log.info("Deleted stock unit embedding STOCK_UNIT_POID={}", stockUnitPoid);
     }
+
+    @Transactional
+    public int clearLocalInventoryEmbeddings() {
+        int deletedStocks = vectorRepository.clearAllStockEmbeddings();
+        int deletedUnits = vectorRepository.clearAllStockUnitEmbeddings();
+        int total = deletedStocks + deletedUnits;
+        log.info("Cleared local embeddings: stockRows={} unitRows={} totalRows={}", deletedStocks, deletedUnits, total);
+        return total;
+    }
+
+    @Transactional
+    public int syncAllStockEmbeddingsFromCommonDb() {
+        int processed = 0;
+        for (InventoryEntity stock : inventoryRepository.findAllActiveNotDeleted()) {
+            regenerateStockEmbedding(stock);
+            processed++;
+        }
+        log.info("Synced stock embeddings from common DB; processed={}", processed);
+        return processed;
+    }
+
+    @Transactional
+    public int syncAllStockUnitEmbeddingsFromCommonDb() {
+        int processed = 0;
+        for (UnitEntity stockUnit : unitRepository.findAllActiveNotDeleted()) {
+            regenerateStockUnitEmbedding(stockUnit);
+            processed++;
+        }
+        log.info("Synced stock unit embeddings from common DB; processed={}", processed);
+        return processed;
+    }
 }

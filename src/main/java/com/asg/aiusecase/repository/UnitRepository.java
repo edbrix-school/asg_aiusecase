@@ -63,6 +63,17 @@ public class UnitRepository {
         return commonDbJdbcTemplate.query(sql, this::mapStockUnit, active, deleted);
     }
 
+    public List<UnitEntity> findAllActiveNotDeleted() {
+        String sql = """
+                SELECT STOCK_UNIT_POID, STOCK_UNIT_CODE, STOCK_UNIT_NAME, ACTIVE, DELETED
+                FROM STOCK_UNIT_MASTER
+                WHERE COALESCE(ACTIVE, 'Y') = 'Y'
+                  AND COALESCE(DELETED, 'N') = 'N'
+                ORDER BY STOCK_UNIT_POID
+                """;
+        return commonDbJdbcTemplate.query(sql, this::mapStockUnit);
+    }
+
     private UnitEntity mapStockUnit(ResultSet rs, int rowNum) throws SQLException {
         UnitEntity unit = new UnitEntity();
         unit.setStockUnitPoid(rs.getLong("STOCK_UNIT_POID"));

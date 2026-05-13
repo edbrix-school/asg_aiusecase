@@ -75,9 +75,19 @@ Required endpoints:
 ```text
 POST /search
 POST /stock/embedding-events
+GET /stock/common-db
+GET /stock-unit/common-db
+DELETE /stock/embeddings/local
+POST /stock/embeddings/sync-all
 ```
 
 `POST /stock/embedding-events` is the integration endpoint other microservices call after they complete CRUD in the common database. This service publishes the event to RabbitMQ; the embedding worker then reloads the latest row from `STOCK_MASTER` or `STOCK_UNIT_MASTER` through the configured common DB connection and updates the PostgreSQL vector side table.
+
+`GET /stock/common-db` and `GET /stock-unit/common-db` return the current active, non-deleted records from common DB.
+
+`DELETE /stock/embeddings/local` clears local vector embedding tables.
+
+`POST /stock/embeddings/sync-all` rebuilds local stock and stock-unit embeddings from all active, non-deleted rows in common DB.
 
 ## Databases
 

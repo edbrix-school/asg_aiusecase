@@ -36,3 +36,15 @@ Content-Type: application/json
   "embeddingModel": "text-embedding-3-small",
   "includeCandidates": true
 }
+
+### Get all active stock from common DB
+GET http://localhost:8080/stock/common-db
+
+### Get all active stock units from common DB
+GET http://localhost:8080/stock-unit/common-db
+
+### Clear local embedding tables
+DELETE http://localhost:8080/stock/embeddings/local
+
+### Sync all active stock and stock units from common DB into local embedding tables
+POST http://localhost:8080/stock/embeddings/sync-all

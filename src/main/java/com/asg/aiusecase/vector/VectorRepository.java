@@ -133,6 +133,14 @@ public class VectorRepository {
         jdbcTemplate.update("DELETE FROM stock_unit_vector_embedding WHERE stock_unit_poid = ?", stockUnitPoid);
     }
 
+    public int clearAllStockEmbeddings() {
+        return jdbcTemplate.update("DELETE FROM stock_vector_embedding");
+    }
+
+    public int clearAllStockUnitEmbeddings() {
+        return jdbcTemplate.update("DELETE FROM stock_unit_vector_embedding");
+    }
+
     private InventoryVectorMatch mapInventory(ResultSet rs, int rowNum) throws SQLException {
         return new InventoryVectorMatch(
                 rs.getLong("id"),

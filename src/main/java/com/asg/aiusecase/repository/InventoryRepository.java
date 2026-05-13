@@ -63,6 +63,17 @@ public class InventoryRepository {
         return commonDbJdbcTemplate.query(sql, this::mapStock, active, deleted);
     }
 
+    public List<InventoryEntity> findAllActiveNotDeleted() {
+        String sql = """
+                SELECT STOCK_POID, STOCK_CODE, STOCK_NAME, STOCK_NAME2, STOCK_DESCRIPTION, ACTIVE, DELETED
+                FROM STOCK_MASTER
+                WHERE COALESCE(ACTIVE, 'Y') = 'Y'
+                  AND COALESCE(DELETED, 'N') = 'N'
+                ORDER BY STOCK_POID
+                """;
+        return commonDbJdbcTemplate.query(sql, this::mapStock);
+    }
+
     private InventoryEntity mapStock(ResultSet rs, int rowNum) throws SQLException {
         InventoryEntity stock = new InventoryEntity();
         stock.setStockPoid(rs.getLong("STOCK_POID"));
