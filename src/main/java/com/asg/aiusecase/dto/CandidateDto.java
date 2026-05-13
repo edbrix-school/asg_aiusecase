@@ -1,14 +1,14 @@
 package com.asg.aiusecase.dto;
 
 public record CandidateDto(
-        Long inventoryId,
-        Long unitId,
+        Long stockPoid,
+        Long stockUnitPoid,
         String stockCode,
-        String productName,
-        String unitCode,
-        String unitName,
+        String stockName,
+        String stockUnitCode,
+        String stockUnitName,
         double confidence,
-        double inventorySimilarity,
+        double stockSimilarity,
         double unitSimilarity,
         boolean compatible,
         String reason

@@ -1,8 +1,10 @@
 package com.asg.aiusecase.vector;
 
+import com.asg.aiusecase.entity.InventoryEntity;
+import com.asg.aiusecase.entity.UnitEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -15,7 +17,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Repository
-@RequiredArgsConstructor
 public class VectorRepository {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
@@ -24,13 +25,24 @@ public class VectorRepository {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
+    public VectorRepository(@Qualifier("jdbcTemplate") JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
+    }
+
     public List<InventoryVectorMatch> searchInventory(float[] embedding, int topK, double threshold) {
         String vector = toPgVector(embedding);
         String sql = """
-                SELECT id, product_code, stock_code, product_name, description, metadata_json, serialized_json,
+                SELECT stock_poid AS id,
+                       stock_code,
+                       stock_name,
+                       stock_description,
+                       serialized_json,
                        1 - (embedding_vector <=> ?::vector) AS similarity
-                FROM inventory
+                FROM stock_vector_embedding
                 WHERE embedding_vector IS NOT NULL
+                  AND COALESCE(active, 'Y') = 'Y'
+                  AND COALESCE(deleted, 'N') = 'N'
                   AND 1 - (embedding_vector <=> ?::vector) >= ?
                 ORDER BY embedding_vector <=> ?::vector
                 LIMIT ?
@@ -41,10 +53,15 @@ public class VectorRepository {
     public List<UnitVectorMatch> searchUnits(float[] embedding, int topK, double threshold) {
         String vector = toPgVector(embedding);
         String sql = """
-                SELECT id, inventory_id, unit_code, unit_name, description, metadata_json, serialized_json,
+                SELECT stock_unit_poid AS id,
+                       stock_unit_code,
+                       stock_unit_name,
+                       serialized_json,
                        1 - (embedding_vector <=> ?::vector) AS similarity
-                FROM unit
+                FROM stock_unit_vector_embedding
                 WHERE embedding_vector IS NOT NULL
+                  AND COALESCE(active, 'Y') = 'Y'
+                  AND COALESCE(deleted, 'N') = 'N'
                   AND 1 - (embedding_vector <=> ?::vector) >= ?
                 ORDER BY embedding_vector <=> ?::vector
                 LIMIT ?
@@ -52,36 +69,77 @@ public class VectorRepository {
         return jdbcTemplate.query(sql, this::mapUnit, vector, vector, threshold, vector, topK);
     }
 
-    public void updateInventoryEmbedding(Long id, Map<String, Object> serialized, float[] embedding) {
+    public void upsertStockEmbedding(InventoryEntity stock, Map<String, Object> serialized, float[] embedding) {
         String sql = """
-                UPDATE inventory
-                SET serialized_json = ?::jsonb,
-                    embedding_vector = ?::vector,
+                INSERT INTO stock_vector_embedding (
+                    stock_poid, stock_code, stock_name, stock_name2, stock_description,
+                    active, deleted, serialized_json, embedding_vector, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::vector, now())
+                ON CONFLICT (stock_poid) DO UPDATE
+                SET stock_code = EXCLUDED.stock_code,
+                    stock_name = EXCLUDED.stock_name,
+                    stock_name2 = EXCLUDED.stock_name2,
+                    stock_description = EXCLUDED.stock_description,
+                    active = EXCLUDED.active,
+                    deleted = EXCLUDED.deleted,
+                    serialized_json = EXCLUDED.serialized_json,
+                    embedding_vector = EXCLUDED.embedding_vector,
                     updated_at = now()
-                WHERE id = ?
                 """;
-        jdbcTemplate.update(sql, toJson(serialized), toPgVector(embedding), id);
+        jdbcTemplate.update(sql,
+                stock.getStockPoid(),
+                stock.getStockCode(),
+                stock.getStockName(),
+                stock.getStockName2(),
+                stock.getStockDescription(),
+                stock.getActive(),
+                stock.getDeleted(),
+                toJson(serialized),
+                toPgVector(embedding));
     }
 
-    public void updateUnitEmbedding(Long id, Map<String, Object> serialized, float[] embedding) {
+    public void upsertStockUnitEmbedding(UnitEntity stockUnit, Map<String, Object> serialized, float[] embedding) {
         String sql = """
-                UPDATE unit
-                SET serialized_json = ?::jsonb,
-                    embedding_vector = ?::vector,
+                INSERT INTO stock_unit_vector_embedding (
+                    stock_unit_poid, stock_unit_code, stock_unit_name,
+                    active, deleted, serialized_json, embedding_vector, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?::jsonb, ?::vector, now())
+                ON CONFLICT (stock_unit_poid) DO UPDATE
+                SET stock_unit_code = EXCLUDED.stock_unit_code,
+                    stock_unit_name = EXCLUDED.stock_unit_name,
+                    active = EXCLUDED.active,
+                    deleted = EXCLUDED.deleted,
+                    serialized_json = EXCLUDED.serialized_json,
+                    embedding_vector = EXCLUDED.embedding_vector,
                     updated_at = now()
-                WHERE id = ?
                 """;
-        jdbcTemplate.update(sql, toJson(serialized), toPgVector(embedding), id);
+        jdbcTemplate.update(sql,
+                stockUnit.getStockUnitPoid(),
+                stockUnit.getStockUnitCode(),
+                stockUnit.getStockUnitName(),
+                stockUnit.getActive(),
+                stockUnit.getDeleted(),
+                toJson(serialized),
+                toPgVector(embedding));
+    }
+
+    public void deleteStockEmbedding(Long stockPoid) {
+        jdbcTemplate.update("DELETE FROM stock_vector_embedding WHERE stock_poid = ?", stockPoid);
+    }
+
+    public void deleteStockUnitEmbedding(Long stockUnitPoid) {
+        jdbcTemplate.update("DELETE FROM stock_unit_vector_embedding WHERE stock_unit_poid = ?", stockUnitPoid);
     }
 
     private InventoryVectorMatch mapInventory(ResultSet rs, int rowNum) throws SQLException {
         return new InventoryVectorMatch(
                 rs.getLong("id"),
-                rs.getString("product_code"),
                 rs.getString("stock_code"),
-                rs.getString("product_name"),
-                rs.getString("description"),
-                parseJson(rs.getString("metadata_json")),
+                rs.getString("stock_name"),
+                rs.getString("stock_description"),
+                Map.of(),
                 parseJson(rs.getString("serialized_json")),
                 rs.getDouble("similarity")
         );
@@ -90,11 +148,9 @@ public class VectorRepository {
     private UnitVectorMatch mapUnit(ResultSet rs, int rowNum) throws SQLException {
         return new UnitVectorMatch(
                 rs.getLong("id"),
-                rs.getLong("inventory_id"),
-                rs.getString("unit_code"),
-                rs.getString("unit_name"),
-                rs.getString("description"),
-                parseJson(rs.getString("metadata_json")),
+                rs.getString("stock_unit_code"),
+                rs.getString("stock_unit_name"),
+                Map.of(),
                 parseJson(rs.getString("serialized_json")),
                 rs.getDouble("similarity")
         );

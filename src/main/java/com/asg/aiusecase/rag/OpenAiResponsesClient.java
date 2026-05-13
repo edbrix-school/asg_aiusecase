@@ -32,18 +32,18 @@ public class OpenAiResponsesClient {
         ));
         body.put("text", Map.of("format", Map.of(
                 "type", "json_schema",
-                "name", "inventory_resolution",
+                "name", "stock_resolution",
                 "strict", true,
                 "schema", Map.of(
                         "type", "object",
                         "additionalProperties", false,
                         "properties", Map.of(
-                                "inventoryId", Map.of("type", List.of("number", "null")),
-                                "unitId", Map.of("type", List.of("number", "null")),
+                                "stockPoid", Map.of("type", List.of("number", "null")),
+                                "stockUnitPoid", Map.of("type", List.of("number", "null")),
                                 "confidence", Map.of("type", "number"),
                                 "reason", Map.of("type", "string")
                         ),
-                        "required", List.of("inventoryId", "unitId", "confidence", "reason")
+                        "required", List.of("stockPoid", "stockUnitPoid", "confidence", "reason")
                 )
         )));
         if (model.toLowerCase().startsWith("gpt-5")) {

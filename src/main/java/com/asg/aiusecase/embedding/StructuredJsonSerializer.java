@@ -15,20 +15,25 @@ public class StructuredJsonSerializer {
 
     private final ObjectMapper objectMapper;
 
-    public Map<String, Object> inventoryPayload(InventoryEntity inventory) {
+    public Map<String, Object> inventoryPayload(InventoryEntity stock) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("productCode", inventory.getProductCode());
-        payload.put("stockCode", inventory.getStockCode());
-        payload.put("productName", inventory.getProductName());
-        payload.put("description", inventory.getDescription());
+        payload.put("stockPoid", stock.getStockPoid());
+        payload.put("stockCode", stock.getStockCode());
+        payload.put("stockName", stock.getStockName());
+        payload.put("stockName2", stock.getStockName2());
+        payload.put("stockDescription", stock.getStockDescription());
+        payload.put("active", stock.getActive());
+        payload.put("deleted", stock.getDeleted());
         return payload;
     }
 
-    public Map<String, Object> unitPayload(UnitEntity unit) {
+    public Map<String, Object> unitPayload(UnitEntity stockUnit) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("unitCode", unit.getUnitCode());
-        payload.put("unitName", unit.getUnitName());
-        payload.put("description", unit.getDescription());
+        payload.put("stockUnitPoid", stockUnit.getStockUnitPoid());
+        payload.put("stockUnitCode", stockUnit.getStockUnitCode());
+        payload.put("stockUnitName", stockUnit.getStockUnitName());
+        payload.put("active", stockUnit.getActive());
+        payload.put("deleted", stockUnit.getDeleted());
         return payload;
     }
 

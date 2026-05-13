@@ -11,8 +11,7 @@ public class StockMatcher {
     public boolean exactStockMatch(String query, InventoryEntity inventory) {
         String normalized = normalize(query);
         return containsToken(normalized, inventory.getStockCode())
-                || containsToken(normalized, inventory.getProductCode())
-                || normalize(inventory.getProductName()).equals(normalized);
+                || normalize(inventory.getStockName()).equals(normalized);
     }
 
     public double exactBoost(String query, InventoryEntity inventory) {

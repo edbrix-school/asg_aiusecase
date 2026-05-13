@@ -1,28 +1,19 @@
-### Create inventory
-POST http://localhost:8080/inventory
+### Publish stock master embedding event after external CRUD
+POST http://localhost:8080/stock/embedding-events
 Content-Type: application/json
 
 {
-  "productCode": "FR001",
-  "stockCode": "STK-101",
-  "productName": "French Orange",
-  "description": "Imported orange from France",
-  "metadata": {
-    "category": "fruit"
-  }
+  "type": "STOCK_UPDATED",
+  "stockPoid": 101
 }
 
-### Create valid unit
-POST http://localhost:8080/unit
+### Publish stock unit embedding event after external CRUD
+POST http://localhost:8080/stock/embedding-events
 Content-Type: application/json
 
 {
-  "inventoryId": 1,
-  "unitCode": "CRATE",
-  "unitName": "Crate",
-  "description": "Bulk crate",
-  "validForInventory": true,
-  "compatibilityPriority": 10
+  "type": "STOCK_UNIT_UPDATED",
+  "stockUnitPoid": 12
 }
 
 ### Search with defaults

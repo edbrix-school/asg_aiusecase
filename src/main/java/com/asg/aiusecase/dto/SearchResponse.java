@@ -4,9 +4,9 @@ import java.util.List;
 import java.util.Map;
 
 public record SearchResponse(
-        InventoryDto matchedInventory,
+        InventoryDto matchedStockMaster,
         MatchedStockDto matchedStock,
-        UnitDto matchedUnit,
+        UnitDto matchedStockUnit,
         double confidenceScore,
         double cosineSimilarity,
         ReasoningSource reasoningSource,

@@ -26,6 +26,7 @@ public class InventoryEventPublisher {
                     return message;
                 }
         );
-        log.info("Published inventory event type={} inventoryId={} unitId={}", event.type(), event.inventoryId(), event.unitId());
+        log.info("Published stock embedding event type={} stockPoid={} stockUnitPoid={}",
+                event.type(), event.stockPoid(), event.stockUnitPoid());
     }
 }

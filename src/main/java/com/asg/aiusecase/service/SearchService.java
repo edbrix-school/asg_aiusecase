@@ -188,9 +188,9 @@ public class SearchService {
         Map<String, Object> metadata = new LinkedHashMap<>(cached.reasoningMetadata() == null ? Map.of() : cached.reasoningMetadata());
         metadata.put("cacheLayer", cacheLayer);
         return new SearchResponse(
-                cached.matchedInventory(),
+                cached.matchedStockMaster(),
                 cached.matchedStock(),
-                cached.matchedUnit(),
+                cached.matchedStockUnit(),
                 cached.confidenceScore(),
                 cached.cosineSimilarity(),
                 ReasoningSource.CACHE,

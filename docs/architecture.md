@@ -10,7 +10,7 @@ flowchart LR
     API --> Embed["Embedding Service"]
     Embed --> OpenAI["OpenAI Embeddings"]
     Rules --> Vector["pgvector Search"]
-    Vector --> Postgres["PostgreSQL"]
+    Vector --> Postgres["PostgreSQL vector side tables"]
     Rules --> LLM["LLM Ambiguity Resolver"]
     LLM --> OpenAIResponses["OpenAI Responses API"]
     API --> Rabbit["RabbitMQ Events"]
@@ -42,20 +42,20 @@ sequenceDiagram
         API->>E: generate query embedding
         API->>R: vector cache lookup
         alt vector cache miss
-            par inventory search
-                API->>V: inventory cosine search
-            and unit search
-                API->>V: unit cosine search
+            par stock search
+                API->>V: stock cosine search
+            and stock-unit search
+                API->>V: stock-unit cosine search
             end
         end
-        API->>B: exact, synonym, unit, compatibility, confidence
+        API->>B: exact, synonym, stock-unit, confidence
         alt high confidence
             B-->>API: selected validated match
             API-->>C: reasoningSource=VECTOR
         else ambiguous
             API->>L: one batched LLM request with allowed candidates
-            L-->>API: selected inventoryId/unitId
-            API->>B: validate selected IDs and compatibility again
+            L-->>API: selected stockPoid/stockUnitPoid
+            API->>B: validate selected IDs are in the retrieved candidate set
             API-->>C: reasoningSource=LLM or VECTOR fallback
         end
     end
@@ -66,20 +66,21 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant API as Inventory/Unit API
-    participant DB as PostgreSQL
+    participant API as Stock Event API
+    participant DB as Common Oracle/PostgreSQL stock DB
+    participant VDB as PostgreSQL vector side tables
     participant MQ as RabbitMQ
     participant W as Embedding Worker
     participant AI as OpenAI Embeddings
     participant R as Redis
 
-    C->>API: POST /inventory or POST /unit
-    API->>DB: save relational data and compact serialized JSON
+    C->>API: POST /stock/embedding-events after external CRUD
     API->>MQ: publish durable event
-    API-->>C: 201 Created
+    API-->>C: 202 Accepted
     MQ->>W: consume event
+    W->>DB: load latest STOCK_MASTER/STOCK_UNIT_MASTER row
     W->>AI: generate embedding from compact JSON
-    W->>DB: update embedding_vector
+    W->>VDB: upsert stock_vector_embedding or stock_unit_vector_embedding
     W->>R: increment cache version
 ```
 
@@ -88,10 +89,9 @@ sequenceDiagram
 The LLM receives only:
 
 - original query
-- retrieved inventory candidates
-- retrieved unit candidates
+- retrieved stock candidates
+- retrieved stock-unit candidates
 - similarity scores
-- valid compatibility mappings
 
 The LLM may:
 
@@ -101,8 +101,7 @@ The LLM may:
 
 The LLM may not:
 
-- invent a product
-- invent a unit
+- invent a stock item
+- invent a stock unit
 - invent stock mappings
-- invent compatibility rules
-- override an invalid compatibility rule
+- select IDs outside the retrieved candidate set
