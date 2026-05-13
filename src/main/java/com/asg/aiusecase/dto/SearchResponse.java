@@ -12,6 +12,9 @@ public record SearchResponse(
         ReasoningSource reasoningSource,
         Map<String, Object> reasoningMetadata,
         AmbiguityStatus ambiguityStatus,
-        List<CandidateDto> candidates
+        List<CandidateDto> candidates,
+        Double parsedQuantity,
+        String parsedUnit,
+        String parsedBatch
 ) {
 }

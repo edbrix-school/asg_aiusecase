@@ -24,6 +24,10 @@ public class LlmResolutionService {
     private final HashingService hashingService;
     private final AppProperties properties;
 
+    public LlmClientResult parseQuantityBatch(String systemPrompt, String userPrompt, String modelOverride) {
+        return openAiResponsesClient.parseQuantityBatch(systemPrompt, userPrompt, modelOverride);
+    }
+
     public Optional<ResolvedCandidate> resolve(String query,
                                                List<ResolvedCandidate> candidates,
                                                String modelOverride,

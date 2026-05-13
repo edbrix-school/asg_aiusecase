@@ -12,6 +12,8 @@ public record SearchRequest(
         String chatModel,
         String fallbackModel,
         Boolean allowLlm,
-        Boolean includeCandidates
+        Boolean includeCandidates,
+        Boolean llmParseQuantity,
+        String llmParseModel
 ) {
 }

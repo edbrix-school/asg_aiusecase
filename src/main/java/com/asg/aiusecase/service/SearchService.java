@@ -31,6 +31,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import com.asg.aiusecase.rag.LlmClientResult;
+import com.fasterxml.jackson.databind.JsonNode;
 
 @Slf4j
 @Service
@@ -49,6 +54,8 @@ public class SearchService {
     private final DtoMapper mapper;
     private final ObjectProvider<BusinessMetrics> businessMetrics;
 
+    private static final Pattern QTY_UNIT_AT_END = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*([A-Za-z]+)?\\s*$");
+
     @Transactional(readOnly = true)
     public SearchResponse search(SearchRequest request) {
         String normalized = hashingService.normalize(request.query());
@@ -56,12 +63,54 @@ public class SearchService {
         double threshold = request.minSimilarity() == null
                 ? properties.getMatching().getSimilarityThreshold()
                 : request.minSimilarity();
+        String parseModel = nullToDefault(request.llmParseModel(), "gpt-4.1-nano");
+        boolean parseWithLlm = Boolean.TRUE.equals(request.llmParseQuantity());
         String modelProfile = String.join("|",
                 nullToDefault(request.embeddingModel(), properties.getAi().getEmbeddingModel()),
                 nullToDefault(request.chatModel(), properties.getAi().getChatModel()),
                 String.valueOf(topK),
-                String.valueOf(threshold));
+                String.valueOf(threshold),
+                String.valueOf(parseWithLlm),
+                parseModel);
         String exactHash = hashingService.sha256(normalized + "|" + modelProfile);
+
+        // Parse quantity/unit from query: regex by default, LLM if enabled
+        Double parsedQuantity = null;
+        String parsedUnit = null;
+        String parsedBatch = null;
+        if (parseWithLlm) {
+            try {
+                String qtySys = "Extract quantity, unit (normalize to short form), and batch identifier from the user query. Respond with JSON {quantity:number|null,unit:string|null,batch:string|null}.";
+                String qtyUser = "Query: \"" + request.query() + "\"\nRespond only JSON.";
+                LlmClientResult qtyRes = llmResolutionService.parseQuantityBatch(qtySys, qtyUser, parseModel);
+                JsonNode qtyPayload = qtyRes.payload();
+                if (qtyPayload != null) {
+                    parsedQuantity = qtyPayload.path("quantity").isNumber() ? qtyPayload.path("quantity").asDouble() : null;
+                    parsedUnit = qtyPayload.path("unit").isTextual() ? qtyPayload.path("unit").asText().toUpperCase() : null;
+                    parsedBatch = qtyPayload.path("batch").isTextual() ? qtyPayload.path("batch").asText() : null;
+                }
+            } catch (Exception e) {
+                log.debug("LLM quantity parse failed: {}", e.getMessage());
+            }
+        } else {
+            try {
+                String q = request.query() != null ? request.query().trim() : "";
+                Matcher m = QTY_UNIT_AT_END.matcher(q);
+                if (m.find()) {
+                    String qStr = m.group(1);
+                    String uStr = m.group(2);
+                    if (qStr != null && !qStr.isBlank()) {
+                        parsedQuantity = Double.parseDouble(qStr);
+                    }
+                    if (uStr != null && !uStr.isBlank()) {
+                        parsedUnit = uStr.trim().toUpperCase();
+                    }
+                }
+            } catch (Exception e) {
+                // ignore parse errors; leave parsedQuantity/parsedUnit null
+                log.debug("Regex quantity parse failed: {}", e.getMessage());
+            }
+        }
 
         Optional<SearchResponse> finalCached = cacheService.get(cacheService.finalKey(exactHash), SearchResponse.class);
         if (finalCached.isPresent()) {
@@ -84,10 +133,10 @@ public class SearchService {
                 snapshot.units()
         );
         if (candidates.isEmpty()) {
-            SearchResponse response = unmatchedResponse(request, Map.of(
-                    "vectorInventoryCandidates", snapshot.inventories().size(),
-                    "vectorUnitCandidates", snapshot.units().size()
-            ));
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("vectorInventoryCandidates", snapshot.inventories().size());
+            meta.put("vectorUnitCandidates", snapshot.units().size());
+            SearchResponse response = unmatchedResponse(request, meta, parsedQuantity, parsedUnit, parsedBatch);
             cacheSearch(exactHash, response);
             return response;
         }
@@ -104,7 +153,10 @@ public class SearchService {
         ReasoningSource source = ReasoningSource.VECTOR;
         AmbiguityStatus ambiguityStatus = ambiguous ? AmbiguityStatus.AMBIGUOUS : AmbiguityStatus.NONE;
 
+        // prepare reasoning metadata map early so cheap parse can add to it
+        Map<String, Object> meta = metadata(snapshot, ambiguous, allowLlm);
         if (ambiguous && allowLlm) {
+            // Resolve ambiguity using LLM for stock/unit selection
             selected = llmResolutionService.resolve(request.query(), candidates, request.chatModel(), request.fallbackModel());
             if (selected.isPresent()) {
                 source = ReasoningSource.LLM;
@@ -112,6 +164,7 @@ public class SearchService {
                 businessMetrics.ifAvailable(BusinessMetrics::llmResolved);
             }
         }
+
         if (selected.isEmpty()) {
             selected = fallbackSelector.selectBestBusinessValidCandidate(candidates);
             if (ambiguous) {
@@ -120,15 +173,15 @@ public class SearchService {
         }
 
         SearchResponse response;
-        if (selected.isPresent()) {
-            response = toResponse(selected.get(), candidates, source, ambiguityStatus,
-                    request.includeCandidates(), metadata(snapshot, ambiguous, allowLlm));
-        } else {
-            response = unmatchedResponse(request, metadata(snapshot, ambiguous, allowLlm));
-        }
-        cacheSearch(exactHash, response);
-        return response;
-    }
+                if (selected.isPresent()) {
+                    response = toResponse(selected.get(), candidates, source, ambiguityStatus,
+                            request.includeCandidates(), meta, parsedQuantity, parsedUnit, parsedBatch);
+                } else {
+                    response = unmatchedResponse(request, meta, parsedQuantity, parsedUnit, parsedBatch);
+                }
+                cacheSearch(exactHash, response);
+                return response;
+            }
 
     private VectorSearchSnapshot runVectorSearch(float[] queryEmbedding, int topK, double threshold, String vectorHash) {
         CompletableFuture<List<InventoryVectorMatch>> inventoryFuture = CompletableFuture.supplyAsync(
@@ -145,7 +198,10 @@ public class SearchService {
                                       ReasoningSource source,
                                       AmbiguityStatus ambiguityStatus,
                                       Boolean includeCandidates,
-                                      Map<String, Object> metadata) {
+                                      Map<String, Object> metadata,
+                                      Double parsedQuantity,
+                                      String parsedUnit,
+                                      String parsedBatch) {
         List<CandidateDto> candidateDtos = Boolean.TRUE.equals(includeCandidates)
                 ? candidates.stream()
                 .sorted(Comparator.comparingDouble(ResolvedCandidate::confidence).reversed())
@@ -161,13 +217,17 @@ public class SearchService {
                 source,
                 metadata,
                 ambiguityStatus,
-                candidateDtos
+                candidateDtos,
+                parsedQuantity,
+                parsedUnit,
+                parsedBatch
         );
     }
 
-    private SearchResponse unmatchedResponse(SearchRequest request, Map<String, Object> metadata) {
+    private SearchResponse unmatchedResponse(SearchRequest request, Map<String, Object> metadata,
+                                             Double parsedQuantity, String parsedUnit, String parsedBatch) {
         return new SearchResponse(null, null, null, 0.0, 0.0, ReasoningSource.VECTOR,
-                metadata, AmbiguityStatus.UNRESOLVED, List.of());
+                metadata, AmbiguityStatus.UNRESOLVED, List.of(), parsedQuantity, parsedUnit, parsedBatch);
     }
 
     private Map<String, Object> metadata(VectorSearchSnapshot snapshot, boolean ambiguous, boolean allowLlm) {
@@ -196,7 +256,10 @@ public class SearchService {
                 ReasoningSource.CACHE,
                 metadata,
                 cached.ambiguityStatus(),
-                cached.candidates()
+                cached.candidates(),
+                cached.parsedQuantity(),
+                cached.parsedUnit(),
+                cached.parsedBatch()
         );
     }
 
